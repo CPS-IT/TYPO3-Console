@@ -20,6 +20,7 @@ use TYPO3\CMS\Core\Registry;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Install\Updates\AbstractUpdate;
 use TYPO3\CMS\Install\Updates\ChattyInterface;
+use TYPO3\CMS\Install\Updates\PrerequisiteInterface;
 use TYPO3\CMS\Install\Updates\RepeatableInterface;
 use TYPO3\CMS\Install\Updates\UpgradeWizardInterface;
 
@@ -91,6 +92,7 @@ class UpgradeWizardExecutor
         );
 
         if ($wizardImplementsInterface) {
+            $this->handlePreRequisites($upgradeWizard);
             $hasPerformed = $upgradeWizard->executeUpdate();
 
             if (!$upgradeWizard instanceof RepeatableInterface) {
@@ -130,5 +132,26 @@ class UpgradeWizardExecutor
         $argumentNamespace = str_replace('TYPO3\\CMS\\Install\\Updates\\', '', $identifier);
 
         return isset($processedArguments[$argumentNamespace]) ? $processedArguments[$argumentNamespace] : $processedArguments;
+    }
+
+    /**
+     * @param UpgradeWizardInterface $upgradeWizard
+     */
+    protected function handlePreRequisites(UpgradeWizardInterface $upgradeWizard): void
+    {
+        $preRequisites = $upgradeWizard->getPrerequisites();
+        if (!empty($preRequisites)) {
+            foreach ($preRequisites as $class) {
+                if (!in_array(PrerequisiteInterface::class, class_implements($class))) {
+                    continue;
+                }
+                /** @var PrerequisiteInterface $preRequisite */
+                $preRequisite = GeneralUtility::makeInstance($class);
+                if ($preRequisite->isFulfilled()) {
+                    continue;
+                }
+                $preRequisite->ensure();
+            }
+        }
     }
 }
